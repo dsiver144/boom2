@@ -4141,6 +4141,7 @@ openfl_display_Sprite.prototype = $extend(openfl_display_DisplayObjectContainer.
 	,__properties__: $extend(openfl_display_DisplayObjectContainer.prototype.__properties__,{get_graphics:"get_graphics",set_buttonMode:"set_buttonMode",get_buttonMode:"get_buttonMode"})
 });
 var Main = function() {
+	this.host = null;
 	this.state = 10;
 	this.gameState = "findingEnemies";
 	this.requestedDirection = -1;
@@ -4149,9 +4150,20 @@ var Main = function() {
 	this.mapTileHash = new haxe_ds_StringMap();
 	var _gthis = this;
 	openfl_display_Sprite.call(this);
-	this.client = (typeof io == 'undefined' ? require('socket.io-client') : io)("https://dsi-boom.herokuapp.com/");
+	var idleText = new openfl_text_TextField();
+	idleText.set_y(this.stage.stageHeight * 0.1);
+	idleText.set_text("Finding Opponent...");
+	idleText.set_scaleX(3.0);
+	idleText.set_scaleY(3.0);
+	var tmp = this.stage.stageWidth / 2 - idleText.get_width() / 2;
+	idleText.set_x(tmp);
+	this.addChild(idleText);
+	var localTest = false;
+	var localUrl = "http://192.168.1.230:3000";
+	var serverUrl = "https://dsi-boom.herokuapp.com/";
+	this.client = (typeof io == 'undefined' ? require('socket.io-client') : io)(localTest ? localUrl : serverUrl);
 	this.client.on("connect",function(data) {
-		haxe_Log.trace("Client is connected successfully!",{ fileName : "Main.hx", lineNumber : 52, className : "Main", methodName : "new"});
+		haxe_Log.trace("Client is connected successfully!",{ fileName : "Main.hx", lineNumber : 70, className : "Main", methodName : "new"});
 	});
 	Main.instance = this;
 	var bitmapData = openfl_utils_Assets.getBitmapData("assets/Tileset.png");
@@ -4166,26 +4178,34 @@ var Main = function() {
 	this.stage.addEventListener("keyDown",$bind(this,this.onKeyDown));
 	this.stage.addEventListener("keyUp",$bind(this,this.onKeyUp));
 	this.client.on("startGame",function(data1) {
-		haxe_Log.trace("Server: Begin game with" + data1.host,{ fileName : "Main.hx", lineNumber : 108, className : "Main", methodName : "new"});
-		haxe_Log.trace(data1.mapData,{ fileName : "Main.hx", lineNumber : 109, className : "Main", methodName : "new"});
+		_gthis.removeChild(idleText);
+		haxe_Log.trace("Server: Begin game with" + data1.host,{ fileName : "Main.hx", lineNumber : 127, className : "Main", methodName : "new"});
+		haxe_Log.trace(data1.mapData,{ fileName : "Main.hx", lineNumber : 130, className : "Main", methodName : "new"});
 		_gthis.mapData = data1.mapData;
 		_gthis.createMapFromData(_gthis.mapData);
 		var startX = data1.startPosition[0][0];
 		var startY = data1.startPosition[0][1];
 		_gthis.player.setStartPosition(startX,startY);
-		haxe_Log.trace(startX,{ fileName : "Main.hx", lineNumber : 115, className : "Main", methodName : "new", customParams : [startY]});
+		haxe_Log.trace(startX,{ fileName : "Main.hx", lineNumber : 136, className : "Main", methodName : "new", customParams : [startY]});
 		_gthis.tilemap.addTile(_gthis.player);
 		var startX2 = data1.startPosition[1][0];
 		var startY2 = data1.startPosition[1][1];
 		_gthis.player2.setStartPosition(startX2,startY2);
-		haxe_Log.trace(startX2,{ fileName : "Main.hx", lineNumber : 121, className : "Main", methodName : "new", customParams : [startY2]});
+		haxe_Log.trace(startX2,{ fileName : "Main.hx", lineNumber : 142, className : "Main", methodName : "new", customParams : [startY2]});
 		_gthis.tilemap.addTile(_gthis.player2);
 	});
 	this.client.on("enemyMove",function(data2) {
-		_gthis.player2.move(data2.direction);
 	});
 	this.client.on("enemyPlaceBomb",function(data3) {
-		_gthis.addBomb(data3.x,data3.y);
+		_gthis.addBomb(data3.x,data3.y,false);
+	});
+	this.client.on("enemyPosition",function(data4) {
+		haxe_Log.trace("update enemy position",{ fileName : "Main.hx", lineNumber : 153, className : "Main", methodName : "new"});
+		haxe_Log.trace(data4,{ fileName : "Main.hx", lineNumber : 154, className : "Main", methodName : "new"});
+		_gthis.player2.set_x(data4.position[0]);
+		_gthis.player2.set_y(data4.position[1]);
+		_gthis.player2.realX = data4.position[2] | 0;
+		_gthis.player2.realY = data4.position[3] | 0;
 	});
 };
 $hxClasses["Main"] = Main;
@@ -4203,40 +4223,31 @@ Main.prototype = $extend(openfl_display_Sprite.prototype,{
 	,client: null
 	,gameState: null
 	,state: null
-	,gameOver: function() {
+	,host: null
+	,updateGameResult: function() {
+		if(!this.player.dead && !this.player2.dead) {
+			return;
+		}
 		this.gameState = "finish";
-		motion_Actuate.tween(this.player,1,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone());
-		haxe_Timer.delay(function() {
-			haxe_Log.trace("You Lose",{ fileName : "Main.hx", lineNumber : 137, className : "Main", methodName : "gameOver"});
-		},1000);
-	}
-	,win: function() {
-		this.gameState = "finish";
-		motion_Actuate.tween(this.player2,1,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone());
-		haxe_Timer.delay(function() {
-			haxe_Log.trace("You Win",{ fileName : "Main.hx", lineNumber : 145, className : "Main", methodName : "win"});
-		},1000);
-	}
-	,placeRandomSoftWallToMap: function() {
-		var _g1 = 0;
-		var _g = this.mapData.length;
-		while(_g1 < _g) {
-			var j = _g1++;
-			var row = this.mapData[j];
-			var _g3 = 0;
-			var _g2 = row.length;
-			while(_g3 < _g2) {
-				var i = _g3++;
-				if(row[i] == 1) {
-					if(Math.random() > 0.8) {
-						row[i] = 2;
-					}
-				}
-			}
+		if(this.player.dead && this.player2.dead) {
+			motion_Actuate.tween(this.player,1,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone());
+			motion_Actuate.tween(this.player2,1,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone());
+			js_Browser.alert("Draw!");
+			return;
+		}
+		if(this.player.dead) {
+			motion_Actuate.tween(this.player,1,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone());
+			js_Browser.alert("You lose, too bad!");
+			return;
+		}
+		if(this.player2.dead) {
+			motion_Actuate.tween(this.player2,1,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone());
+			js_Browser.alert("You won, congrats!");
+			return;
 		}
 	}
 	,createMapFromData: function(mapData) {
-		haxe_Log.trace(mapData[0],{ fileName : "Main.hx", lineNumber : 161, className : "Main", methodName : "createMapFromData"});
+		haxe_Log.trace(mapData[0],{ fileName : "Main.hx", lineNumber : 186, className : "Main", methodName : "createMapFromData"});
 		var _g1 = 0;
 		var _g = mapData.length;
 		while(_g1 < _g) {
@@ -4290,16 +4301,24 @@ Main.prototype = $extend(openfl_display_Sprite.prototype,{
 		this.tilemap.removeTile(this.player2);
 		this.tilemap.addTile(this.player2);
 	}
-	,addBomb: function(x,y) {
-		var bomb = new Bomb(x,y);
-		this.tilemap.addTile(bomb);
-		this.putPlayerTileOnTop();
+	,addBomb: function(x,y,youPlacedTheBomb) {
 		var _this = this.bombMap;
 		var key = "" + x + "-" + y;
-		if(__map_reserved[key] != null) {
-			_this.setReserved(key,bomb);
+		if(__map_reserved[key] != null ? _this.existsReserved(key) : _this.h.hasOwnProperty(key)) {
+			return;
+		}
+		var bomb = new Bomb(x,y,youPlacedTheBomb);
+		this.tilemap.addTile(bomb);
+		this.putPlayerTileOnTop();
+		var _this1 = this.bombMap;
+		var key1 = "" + x + "-" + y;
+		if(__map_reserved[key1] != null) {
+			_this1.setReserved(key1,bomb);
 		} else {
-			_this.h[key] = bomb;
+			_this1.h[key1] = bomb;
+		}
+		if(youPlacedTheBomb) {
+			this.player.bombPoints -= 1;
 		}
 	}
 	,addTrail: function(x,y,direction,end) {
@@ -4364,8 +4383,13 @@ Main.prototype = $extend(openfl_display_Sprite.prototype,{
 			break;
 		}
 		if(e.keyCode == 32) {
-			this.client.emit("addBomb",{ "x" : this.player.realX, "y" : this.player.realY});
-			this.addBomb(this.player.realX,this.player.realY);
+			if(this.player.canPlaceBomb()) {
+				if(this.gameState == "finish") {
+					return;
+				}
+				this.client.emit("addBomb",{ "x" : this.player.realX, "y" : this.player.realY});
+				this.addBomb(this.player.realX,this.player.realY,true);
+			}
 		}
 	}
 	,onKeyUp: function(e) {
@@ -4378,12 +4402,12 @@ Main.prototype = $extend(openfl_display_Sprite.prototype,{
 			if(this.player.isMoving()) {
 				return;
 			}
-			this.client.emit("playerMove",{ "direction" : this.requestedDirection});
 			this.player.move(this.requestedDirection);
 			this.requestedDirection = -1;
 		}
 		this.player.update();
 		this.player2.update();
+		this.client.emit("playerPos",{ "position" : [this.player.get_x(),this.player.get_y(),this.player.realX,this.player.realY]});
 		var key = this.bombMap.keys();
 		while(key.hasNext()) {
 			var key1 = key.next();
@@ -4783,7 +4807,8 @@ openfl_display_Tile.prototype = {
 	,__class__: openfl_display_Tile
 	,__properties__: {set_y:"set_y",get_y:"get_y",set_x:"set_x",get_x:"get_x",set_visible:"set_visible",get_visible:"get_visible",set_tileset:"set_tileset",get_tileset:"get_tileset",set_shader:"set_shader",get_shader:"get_shader",set_scaleY:"set_scaleY",get_scaleY:"get_scaleY",set_scaleX:"set_scaleX",get_scaleX:"get_scaleX",set_rotation:"set_rotation",get_rotation:"get_rotation",set_rect:"set_rect",get_rect:"get_rect",set_originY:"set_originY",get_originY:"get_originY",set_originX:"set_originX",get_originX:"get_originX",set_matrix:"set_matrix",get_matrix:"get_matrix",set_id:"set_id",get_id:"get_id",set_colorTransform:"set_colorTransform",get_colorTransform:"get_colorTransform",set_blendMode:"set_blendMode",get_blendMode:"get_blendMode",set_alpha:"set_alpha",get_alpha:"get_alpha"}
 };
-var Bomb = function(x,y) {
+var Bomb = function(x,y,bombPlacer) {
+	this.bombPlacer = null;
 	this.explosed = false;
 	this.pulseCount = 0;
 	this.explosionCount = 0;
@@ -4795,6 +4820,7 @@ var Bomb = function(x,y) {
 	this.realX = x;
 	this.realY = y;
 	this.explosion_range = 2;
+	this.bombPlacer = bombPlacer;
 	this.explosionCount = 90;
 };
 $hxClasses["Bomb"] = Bomb;
@@ -4807,6 +4833,7 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 	,realY: null
 	,explosion_range: null
 	,explosed: null
+	,bombPlacer: null
 	,checkCollision: function(x,y) {
 		var result = "none";
 		var mapData = Main.instance.mapData;
@@ -4834,6 +4861,9 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 		return result;
 	}
 	,explose: function() {
+		if(this.bombPlacer) {
+			Main.instance.player.restoreBombPoint();
+		}
 		var bombMap = Main.instance.bombMap;
 		Main.instance.tilemap.removeTile(this);
 		bombMap.remove("" + this.realX + "-" + this.realY);
@@ -4845,14 +4875,22 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 		var checkY = this.realY;
 		var brokenWalls = new haxe_ds_StringMap();
 		Main.instance.addTrail(checkX,checkY,-1,false);
+		var collision = this.checkCollision(checkX,checkY);
+		if(collision == "player") {
+			Main.instance.player.dead = true;
+		}
+		if(collision == "enemy") {
+			Main.instance.player2.dead = true;
+		}
+		Main.instance.updateGameResult();
 		while(times < this.explosion_range) {
 			++dx;
 			++times;
 			checkX = this.realX + dx;
 			checkY = this.realY;
-			var collision = this.checkCollision(checkX,checkY);
-			if(collision != "none") {
-				if(collision == "softWall") {
+			var collision1 = this.checkCollision(checkX,checkY);
+			if(collision1 != "none") {
+				if(collision1 == "softWall") {
 					var key = "" + checkX + "-" + checkY;
 					if(__map_reserved[key] != null) {
 						brokenWalls.setReserved(key,1);
@@ -4861,15 +4899,16 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 					}
 					break;
 				}
-				if(collision == "wall") {
+				if(collision1 == "wall") {
 					break;
 				}
-				if(collision == "player") {
-					Main.instance.gameOver();
+				if(collision1 == "player") {
+					Main.instance.player.dead = true;
 				}
-				if(collision == "enemy") {
-					Main.instance.win();
+				if(collision1 == "enemy") {
+					Main.instance.player2.dead = true;
 				}
+				Main.instance.updateGameResult();
 			}
 			Main.instance.addTrail(checkX,checkY,6,times >= this.explosion_range);
 			var key1 = "" + checkX + "-" + checkY;
@@ -4886,9 +4925,9 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 			++times;
 			checkX = this.realX + dx;
 			checkY = this.realY;
-			var collision1 = this.checkCollision(checkX,checkY);
-			if(collision1 != "none") {
-				if(collision1 == "softWall") {
+			var collision2 = this.checkCollision(checkX,checkY);
+			if(collision2 != "none") {
+				if(collision2 == "softWall") {
 					var key3 = "" + checkX + "-" + checkY;
 					if(__map_reserved[key3] != null) {
 						brokenWalls.setReserved(key3,1);
@@ -4897,15 +4936,16 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 					}
 					break;
 				}
-				if(collision1 == "wall") {
+				if(collision2 == "wall") {
 					break;
 				}
-				if(collision1 == "player") {
-					Main.instance.gameOver();
+				if(collision2 == "player") {
+					Main.instance.player.dead = true;
 				}
-				if(collision1 == "enemy") {
-					Main.instance.win();
+				if(collision2 == "enemy") {
+					Main.instance.player2.dead = true;
 				}
+				Main.instance.updateGameResult();
 			}
 			Main.instance.addTrail(checkX,checkY,4,times >= this.explosion_range);
 			var key4 = "" + checkX + "-" + checkY;
@@ -4922,9 +4962,9 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 			++times;
 			checkX = this.realX;
 			checkY = this.realY + dy;
-			var collision2 = this.checkCollision(checkX,checkY);
-			if(collision2 != "none") {
-				if(collision2 == "softWall") {
+			var collision3 = this.checkCollision(checkX,checkY);
+			if(collision3 != "none") {
+				if(collision3 == "softWall") {
 					var key6 = "" + checkX + "-" + checkY;
 					if(__map_reserved[key6] != null) {
 						brokenWalls.setReserved(key6,1);
@@ -4933,15 +4973,16 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 					}
 					break;
 				}
-				if(collision2 == "wall") {
+				if(collision3 == "wall") {
 					break;
 				}
-				if(collision2 == "player") {
-					Main.instance.gameOver();
+				if(collision3 == "player") {
+					Main.instance.player.dead = true;
 				}
-				if(collision2 == "enemy") {
-					Main.instance.win();
+				if(collision3 == "enemy") {
+					Main.instance.player2.dead = true;
 				}
+				Main.instance.updateGameResult();
 			}
 			Main.instance.addTrail(checkX,checkY,8,times >= this.explosion_range);
 			var key7 = "" + checkX + "-" + checkY;
@@ -4958,9 +4999,9 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 			++times;
 			checkX = this.realX;
 			checkY = this.realY + dy;
-			var collision3 = this.checkCollision(checkX,checkY);
-			if(collision3 != "none") {
-				if(collision3 == "softWall") {
+			var collision4 = this.checkCollision(checkX,checkY);
+			if(collision4 != "none") {
+				if(collision4 == "softWall") {
 					var key9 = "" + checkX + "-" + checkY;
 					if(__map_reserved[key9] != null) {
 						brokenWalls.setReserved(key9,1);
@@ -4969,15 +5010,16 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 					}
 					break;
 				}
-				if(collision3 == "wall") {
+				if(collision4 == "wall") {
 					break;
 				}
-				if(collision3 == "player") {
-					Main.instance.gameOver();
+				if(collision4 == "player") {
+					Main.instance.player.dead = true;
 				}
-				if(collision3 == "enemy") {
-					Main.instance.win();
+				if(collision4 == "enemy") {
+					Main.instance.player2.dead = true;
 				}
+				Main.instance.updateGameResult();
 			}
 			Main.instance.addTrail(checkX,checkY,2,times >= this.explosion_range);
 			var key10 = "" + checkX + "-" + checkY;
@@ -5012,7 +5054,7 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 		if(this.explosionCount > 0) {
 			this.explosionCount--;
 		} else {
-			haxe_Log.trace("Boom!",{ fileName : "Bomb.hx", lineNumber : 181, className : "Bomb", methodName : "update"});
+			haxe_Log.trace("Boom!",{ fileName : "Bomb.hx", lineNumber : 194, className : "Bomb", methodName : "update"});
 			this.explose();
 		}
 	}
@@ -5150,8 +5192,8 @@ var ExplosionTrail = function(tileId,x,y,scaleX,scaleY) {
 	var _this2 = Main.instance.explosionMap;
 	(__map_reserved[key2] != null ? _this2.getReserved(key2) : _this2.h[key2]).push(this);
 	Main.instance.tilemap.addTile(this);
-	motion_Actuate.tween(this,0.5,{ alpha : 1}).ease(motion_easing_Linear.get_easeNone()).onComplete(function() {
-		motion_Actuate.tween(_gthis,0.5,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone()).onComplete(function() {
+	motion_Actuate.tween(this,0.2,{ alpha : 1}).ease(motion_easing_Linear.get_easeNone()).onComplete(function() {
+		motion_Actuate.tween(_gthis,0.35,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone()).onComplete(function() {
 			var key3 = "" + _gthis.realX + "-" + _gthis.realY;
 			var _this3 = Main.instance.explosionMap;
 			HxOverrides.remove(__map_reserved[key3] != null ? _this3.getReserved(key3) : _this3.h[key3],_gthis);
@@ -5304,6 +5346,8 @@ var Player = function(player) {
 	this.set_id(4);
 	this.idleCount = Player.MAX_IDLE_COUNT;
 	this.playerFlag = player;
+	this.maxBombPoints = Player.DEFAULT_MAX_BOMB_POINT;
+	this.bombPoints = this.maxBombPoints;
 };
 $hxClasses["Player"] = Player;
 Player.__name__ = ["Player"];
@@ -5311,10 +5355,16 @@ Player.__super__ = openfl_display_Tile;
 Player.prototype = $extend(openfl_display_Tile.prototype,{
 	realX: null
 	,realY: null
+	,maxBombPoints: null
+	,bombPoints: null
+	,dead: null
 	,idleCount: null
 	,playerFlag: null
 	,isYou: function() {
 		return this.playerFlag;
+	}
+	,isDead: function() {
+		return this.dead;
 	}
 	,setStartPosition: function(x,y) {
 		this.realX = x;
@@ -5352,6 +5402,16 @@ Player.prototype = $extend(openfl_display_Tile.prototype,{
 		if(this.checkCollision(heading[0],heading[1]) == false) {
 			this.realX += heading[0];
 			this.realY += heading[1];
+		}
+	}
+	,canPlaceBomb: function() {
+		return this.bombPoints > 0;
+	}
+	,restoreBombPoint: function() {
+		haxe_Log.trace("Restore Bomb",{ fileName : "Player.hx", lineNumber : 74, className : "Player", methodName : "restoreBombPoint"});
+		this.bombPoints += 1;
+		if(this.bombPoints > this.maxBombPoints) {
+			this.bombPoints = this.maxBombPoints;
 		}
 	}
 	,isMoving: function() {
@@ -26507,7 +26567,7 @@ var lime_utils_AssetCache = function() {
 	this.audio = new haxe_ds_StringMap();
 	this.font = new haxe_ds_StringMap();
 	this.image = new haxe_ds_StringMap();
-	this.version = 746350;
+	this.version = 752933;
 };
 $hxClasses["lime.utils.AssetCache"] = lime_utils_AssetCache;
 lime_utils_AssetCache.__name__ = ["lime","utils","AssetCache"];
@@ -76814,6 +76874,7 @@ Bomb.EXPLOSION_MAX_COUNT = 90;
 Bomb.PULSE_MAX_COUNT = 10;
 Player.MAX_IDLE_COUNT = 10;
 Player.MOVE_SPEED = 6;
+Player.DEFAULT_MAX_BOMB_POINT = 3;
 haxe_Serializer.USE_CACHE = false;
 haxe_Serializer.USE_ENUM_INDEX = false;
 haxe_Serializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";
