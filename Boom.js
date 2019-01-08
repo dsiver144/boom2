@@ -4141,6 +4141,7 @@ openfl_display_Sprite.prototype = $extend(openfl_display_DisplayObjectContainer.
 	,__properties__: $extend(openfl_display_DisplayObjectContainer.prototype.__properties__,{get_graphics:"get_graphics",set_buttonMode:"set_buttonMode",get_buttonMode:"get_buttonMode"})
 });
 var Main = function() {
+	this.state = 10;
 	this.gameState = "findingEnemies";
 	this.requestedDirection = -1;
 	this.explosionMap = new haxe_ds_StringMap();
@@ -4148,9 +4149,9 @@ var Main = function() {
 	this.mapTileHash = new haxe_ds_StringMap();
 	var _gthis = this;
 	openfl_display_Sprite.call(this);
-	this.client = (typeof io == 'undefined' ? require('socket.io-client') : io)("https://http://dsi-boom.herokuapp.com/");
+	this.client = (typeof io == 'undefined' ? require('socket.io-client') : io)("https://dsi-boom.herokuapp.com/");
 	this.client.on("connect",function(data) {
-		haxe_Log.trace("Client is connected successfully!",{ fileName : "Main.hx", lineNumber : 50, className : "Main", methodName : "new"});
+		haxe_Log.trace("Client is connected successfully!",{ fileName : "Main.hx", lineNumber : 52, className : "Main", methodName : "new"});
 	});
 	Main.instance = this;
 	var bitmapData = openfl_utils_Assets.getBitmapData("assets/Tileset.png");
@@ -4165,19 +4166,19 @@ var Main = function() {
 	this.stage.addEventListener("keyDown",$bind(this,this.onKeyDown));
 	this.stage.addEventListener("keyUp",$bind(this,this.onKeyUp));
 	this.client.on("startGame",function(data1) {
-		haxe_Log.trace("Server: Begin game with" + data1.host,{ fileName : "Main.hx", lineNumber : 106, className : "Main", methodName : "new"});
-		haxe_Log.trace(data1.mapData,{ fileName : "Main.hx", lineNumber : 107, className : "Main", methodName : "new"});
+		haxe_Log.trace("Server: Begin game with" + data1.host,{ fileName : "Main.hx", lineNumber : 108, className : "Main", methodName : "new"});
+		haxe_Log.trace(data1.mapData,{ fileName : "Main.hx", lineNumber : 109, className : "Main", methodName : "new"});
 		_gthis.mapData = data1.mapData;
 		_gthis.createMapFromData(_gthis.mapData);
 		var startX = data1.startPosition[0][0];
 		var startY = data1.startPosition[0][1];
 		_gthis.player.setStartPosition(startX,startY);
-		haxe_Log.trace(startX,{ fileName : "Main.hx", lineNumber : 113, className : "Main", methodName : "new", customParams : [startY]});
+		haxe_Log.trace(startX,{ fileName : "Main.hx", lineNumber : 115, className : "Main", methodName : "new", customParams : [startY]});
 		_gthis.tilemap.addTile(_gthis.player);
 		var startX2 = data1.startPosition[1][0];
 		var startY2 = data1.startPosition[1][1];
 		_gthis.player2.setStartPosition(startX2,startY2);
-		haxe_Log.trace(startX2,{ fileName : "Main.hx", lineNumber : 119, className : "Main", methodName : "new", customParams : [startY2]});
+		haxe_Log.trace(startX2,{ fileName : "Main.hx", lineNumber : 121, className : "Main", methodName : "new", customParams : [startY2]});
 		_gthis.tilemap.addTile(_gthis.player2);
 	});
 	this.client.on("enemyMove",function(data2) {
@@ -4201,18 +4202,19 @@ Main.prototype = $extend(openfl_display_Sprite.prototype,{
 	,requestedDirection: null
 	,client: null
 	,gameState: null
+	,state: null
 	,gameOver: function() {
 		this.gameState = "finish";
 		motion_Actuate.tween(this.player,1,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone());
 		haxe_Timer.delay(function() {
-			haxe_Log.trace("You Lose",{ fileName : "Main.hx", lineNumber : 135, className : "Main", methodName : "gameOver"});
+			haxe_Log.trace("You Lose",{ fileName : "Main.hx", lineNumber : 137, className : "Main", methodName : "gameOver"});
 		},1000);
 	}
 	,win: function() {
 		this.gameState = "finish";
 		motion_Actuate.tween(this.player2,1,{ alpha : 0}).ease(motion_easing_Linear.get_easeNone());
 		haxe_Timer.delay(function() {
-			haxe_Log.trace("You Win",{ fileName : "Main.hx", lineNumber : 143, className : "Main", methodName : "win"});
+			haxe_Log.trace("You Win",{ fileName : "Main.hx", lineNumber : 145, className : "Main", methodName : "win"});
 		},1000);
 	}
 	,placeRandomSoftWallToMap: function() {
@@ -4234,7 +4236,7 @@ Main.prototype = $extend(openfl_display_Sprite.prototype,{
 		}
 	}
 	,createMapFromData: function(mapData) {
-		haxe_Log.trace(mapData[0],{ fileName : "Main.hx", lineNumber : 159, className : "Main", methodName : "createMapFromData"});
+		haxe_Log.trace(mapData[0],{ fileName : "Main.hx", lineNumber : 161, className : "Main", methodName : "createMapFromData"});
 		var _g1 = 0;
 		var _g = mapData.length;
 		while(_g1 < _g) {
@@ -4893,8 +4895,17 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 					} else {
 						brokenWalls.h[key3] = 1;
 					}
+					break;
 				}
-				break;
+				if(collision1 == "wall") {
+					break;
+				}
+				if(collision1 == "player") {
+					Main.instance.gameOver();
+				}
+				if(collision1 == "enemy") {
+					Main.instance.win();
+				}
 			}
 			Main.instance.addTrail(checkX,checkY,4,times >= this.explosion_range);
 			var key4 = "" + checkX + "-" + checkY;
@@ -4920,8 +4931,17 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 					} else {
 						brokenWalls.h[key6] = 1;
 					}
+					break;
 				}
-				break;
+				if(collision2 == "wall") {
+					break;
+				}
+				if(collision2 == "player") {
+					Main.instance.gameOver();
+				}
+				if(collision2 == "enemy") {
+					Main.instance.win();
+				}
 			}
 			Main.instance.addTrail(checkX,checkY,8,times >= this.explosion_range);
 			var key7 = "" + checkX + "-" + checkY;
@@ -4947,8 +4967,17 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 					} else {
 						brokenWalls.h[key9] = 1;
 					}
+					break;
 				}
-				break;
+				if(collision3 == "wall") {
+					break;
+				}
+				if(collision3 == "player") {
+					Main.instance.gameOver();
+				}
+				if(collision3 == "enemy") {
+					Main.instance.win();
+				}
 			}
 			Main.instance.addTrail(checkX,checkY,2,times >= this.explosion_range);
 			var key10 = "" + checkX + "-" + checkY;
@@ -4983,7 +5012,7 @@ Bomb.prototype = $extend(openfl_display_Tile.prototype,{
 		if(this.explosionCount > 0) {
 			this.explosionCount--;
 		} else {
-			haxe_Log.trace("Boom!",{ fileName : "Bomb.hx", lineNumber : 166, className : "Bomb", methodName : "update"});
+			haxe_Log.trace("Boom!",{ fileName : "Bomb.hx", lineNumber : 181, className : "Bomb", methodName : "update"});
 			this.explose();
 		}
 	}
@@ -26478,7 +26507,7 @@ var lime_utils_AssetCache = function() {
 	this.audio = new haxe_ds_StringMap();
 	this.font = new haxe_ds_StringMap();
 	this.image = new haxe_ds_StringMap();
-	this.version = 612162;
+	this.version = 746350;
 };
 $hxClasses["lime.utils.AssetCache"] = lime_utils_AssetCache;
 lime_utils_AssetCache.__name__ = ["lime","utils","AssetCache"];
