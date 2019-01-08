@@ -4148,7 +4148,7 @@ var Main = function() {
 	this.mapTileHash = new haxe_ds_StringMap();
 	var _gthis = this;
 	openfl_display_Sprite.call(this);
-	this.client = (typeof io == 'undefined' ? require('socket.io-client') : io)("http://192.168.1.230:3000/");
+	this.client = (typeof io == 'undefined' ? require('socket.io-client') : io)("https://http://dsi-boom.herokuapp.com/");
 	this.client.on("connect",function(data) {
 		haxe_Log.trace("Client is connected successfully!",{ fileName : "Main.hx", lineNumber : 50, className : "Main", methodName : "new"});
 	});
@@ -26478,7 +26478,7 @@ var lime_utils_AssetCache = function() {
 	this.audio = new haxe_ds_StringMap();
 	this.font = new haxe_ds_StringMap();
 	this.image = new haxe_ds_StringMap();
-	this.version = 832609;
+	this.version = 612162;
 };
 $hxClasses["lime.utils.AssetCache"] = lime_utils_AssetCache;
 lime_utils_AssetCache.__name__ = ["lime","utils","AssetCache"];
